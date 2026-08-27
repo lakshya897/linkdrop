@@ -1,0 +1,22 @@
+{
+  "name": "@linkdrop/signaling",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsc && node dist/index.js",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"No linting needed for signaling package\""
+  },
+  "dependencies": {
+    "@linkdrop/protocol": "workspace:*",
+    "@linkdrop/shared": "workspace:*",
+    "fastify": "^4.26.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5"
+  }
+}

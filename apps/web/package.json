@@ -1,0 +1,25 @@
+{
+  "name": "@linkdrop/web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"No linting needed for web package\""
+  },
+  "dependencies": {
+    "@linkdrop/protocol": "workspace:*",
+    "@linkdrop/shared": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.8"
+  }
+}
