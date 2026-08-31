@@ -131,6 +131,7 @@ function MainApp() {
         const remaining = totalSize - currentBytes;
         setEta(avg > 0 && remaining > 0 ? Math.ceil(remaining / avg) : null);
       }
+      setBytesTransferred(currentBytes);
     }, 500);
 
     return () => clearInterval(telemetryInterval);
@@ -653,7 +654,7 @@ function MainApp() {
     }, 250);
 
     let chunkIndex = 0;
-    const fileReader = new BoundedFileReader(fileObj, chunkSize, 128);
+    const fileReader = new BoundedFileReader(fileObj, chunkSize, 256);
 
     try {
       while (isSendingRef.current) {
@@ -677,7 +678,14 @@ function MainApp() {
         const payload = await fileReader.readNextChunk();
         if (!payload) break; // End of file
 
-        rtcManagerRef.current?.sendFileChunk(chunkIndex, payload);
+        try {
+          rtcManagerRef.current?.sendFileChunk(chunkIndex, payload);
+        } catch (err) {
+          // If socket buffer temporarily full, wait 10ms for drain and retry chunk without crashing
+          await new Promise(r => setTimeout(r, 10));
+          continue;
+        }
+
         chunkIndex++;
         const sentBytes = Math.min(chunkIndex * chunkSize, fileSize);
         bytesTransferredRef.current = sentBytes;
@@ -685,10 +693,10 @@ function MainApp() {
           setBytesTransferred(sentBytes);
         }
 
-        // Yield to macrotask queue every 512 chunks so WebSocket
+        // Yield to macrotask queue every 2048 chunks (~122 MB) so WebSocket
         // PING/PONG and UI events can process cleanly without stalling
         // network throughput.
-        if (chunkIndex % 512 === 0) {
+        if (chunkIndex % 2048 === 0) {
           await new Promise(r => setTimeout(r, 0));
         }
       }
