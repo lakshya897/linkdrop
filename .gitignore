@@ -38,7 +38,11 @@ Thumbs.db
 
 # Testing
 tests/fixtures/*.bin
+tests/temp_fixtures/
 coverage/
 .nyc_output/
 playwright-report/
 test-results/
+
+.vercel
+.env*

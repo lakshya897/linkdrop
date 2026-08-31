@@ -1,11 +1,44 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LinkDrop - Project Foundation</title>
+    <title>LinkDrop - Share Anything. Instantly.</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              background: "#09090B",
+              surface: "#131315",
+              "surface-variant": "#353437",
+              "surface-container": "#201f22",
+              "surface-container-high": "#2a2a2c",
+              primary: "#8B5CF6",
+              "primary-container": "#a078ff",
+              secondary: "#F472B6",
+              "secondary-container": "#85145a",
+              "on-surface": "#e5e1e4",
+              "on-surface-variant": "#cbc3d7",
+              outline: "#958ea0",
+              "outline-variant": "#494454"
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              display: ["Geist", "sans-serif"],
+              mono: ["Geist", "monospace"]
+            }
+          }
+        }
+      }
+    </script>
   </head>
-  <body>
+  <body class="bg-[#09090B] text-[#e5e1e4] antialiased min-h-screen flex flex-col relative overflow-x-hidden selection:bg-purple-500 selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

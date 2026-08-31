@@ -1,0 +1,32 @@
+{
+  "test1_250MB_FSA": {
+    "status": "PASS",
+    "fileSizeBytes": 262144000,
+    "expectedHash": "cc7f451a21037c81d93b187a39c23d38df91403f55e1c76086ec140ecb527db2",
+    "integrityVerified": true
+  },
+  "test2_900MB_FSA": {
+    "status": "PASS",
+    "fileSizeBytes": 943718400,
+    "expectedHash": "70976f092ce92acf06af333754c0b36d7d91edf8d49ed12e085300b9a4fb8243",
+    "integrityVerified": true
+  },
+  "test3_android_emulation": {
+    "status": "PASS",
+    "device": "Pixel 5 (Chromium Emulation)",
+    "fileSizeBytes": 262144000,
+    "integrityVerified": true
+  },
+  "test4_sequential_transfers": {
+    "status": "PASS",
+    "transfer1": "250 MB COMPLETED",
+    "transfer2": "10 MB COMPLETED",
+    "hashMatch": true
+  },
+  "test5_cancel_transfer": {
+    "status": "PASS"
+  },
+  "test6_peer_disconnect": {
+    "status": "PASS"
+  }
+}
