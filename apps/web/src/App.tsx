@@ -8,8 +8,9 @@ import { BoundedFileReader } from './lib/storage/BoundedFileReader';
 import { BenchmarkPage } from './BenchmarkPage';
 import { CrystalBackground } from './components/CrystalBackground';
 
-const SIGNALING_API_URL = import.meta.env.VITE_SIGNALING_API_URL || 'http://localhost:3000';
-const SIGNALING_WS_URL = import.meta.env.VITE_SIGNALING_WS_URL || 'ws://localhost:3000';
+const isLocalEnv = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const SIGNALING_API_URL = import.meta.env.VITE_SIGNALING_API_URL || (isLocalEnv ? 'http://localhost:3000' : '');
+const SIGNALING_WS_URL = import.meta.env.VITE_SIGNALING_WS_URL || (isLocalEnv ? 'ws://localhost:3000' : '');
 
 function MainApp() {
   const [peerId] = useState(() => crypto.randomUUID());
@@ -453,6 +454,12 @@ function MainApp() {
   };
 
   const handleCreateSession = async () => {
+    if (!SIGNALING_API_URL) {
+      setSessionStatus('ERROR');
+      setErrorMsg('Signaling server is not configured for remote production deployment. To use LinkDrop on Vercel, please set VITE_SIGNALING_API_URL or run locally via "pnpm dev:signaling" and "pnpm dev:web".');
+      return;
+    }
+
     try {
       setErrorMsg(null);
       const res = await fetch(`${SIGNALING_API_URL}/api/sessions`, {
@@ -474,13 +481,23 @@ function MainApp() {
       connectWebSocket(data.sessionId, peerId);
     } catch (err) {
       setSessionStatus('ERROR');
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to create session');
+      if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
+        setErrorMsg(`Failed to connect to signaling server at ${SIGNALING_API_URL}. Please ensure the signaling server is running.`);
+      } else {
+        setErrorMsg(err instanceof Error ? err.message : 'Failed to create session');
+      }
     }
   };
 
   const handleJoinSession = async () => {
     if (inputPin.length !== 6) {
       setErrorMsg('PIN must be exactly 6 digits');
+      return;
+    }
+
+    if (!SIGNALING_API_URL) {
+      setSessionStatus('ERROR');
+      setErrorMsg('Signaling server is not configured for remote production deployment. To use LinkDrop on Vercel, please set VITE_SIGNALING_API_URL or run locally via "pnpm dev:signaling" and "pnpm dev:web".');
       return;
     }
 
@@ -504,7 +521,11 @@ function MainApp() {
       connectWebSocket(data.sessionId, peerId);
     } catch (err) {
       setSessionStatus('ERROR');
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to join session');
+      if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
+        setErrorMsg(`Failed to connect to signaling server at ${SIGNALING_API_URL}. Please ensure the signaling server is running.`);
+      } else {
+        setErrorMsg(err instanceof Error ? err.message : 'Failed to join session');
+      }
     }
   };
 
