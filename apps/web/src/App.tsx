@@ -637,7 +637,7 @@ function MainApp() {
       rtcManagerRef.current?.sampleAndAdapt();
     }, 250);
 
-    const fileReader = new BoundedFileReader(fileObj, chunkSize, 32);
+    const fileReader = new BoundedFileReader(fileObj, chunkSize, 128);
 
     try {
       while (isSendingRef.current) {
@@ -652,7 +652,7 @@ function MainApp() {
                 clearInterval(checkInterval);
                 resolve();
               }
-            }, 50);
+            }, 5);
           });
         }
 
@@ -664,11 +664,10 @@ function MainApp() {
         rtcManagerRef.current?.sendFileChunk(chunkIndex, payload);
         chunkIndex++;
 
-        // Yield to the macrotask queue every 256 chunks so WebSocket
-        // PING/PONG and UI events can be processed, preventing the
-        // signaling server from terminating the session due to
-        // missed heartbeats.
-        if (chunkIndex % 256 === 0) {
+        // Yield to macrotask queue every 1024 chunks so WebSocket
+        // PING/PONG and UI events can process cleanly without stalling
+        // network throughput.
+        if (chunkIndex % 1024 === 0) {
           await new Promise(r => setTimeout(r, 0));
         }
       }

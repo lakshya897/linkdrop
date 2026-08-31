@@ -58,17 +58,17 @@ export interface WatermarkConfig {
 }
 
 const DEFAULT_WATERMARK_CONFIG: WatermarkConfig = {
-  minHighWatermark: 4 * 1024 * 1024,   // 4 MB
-  maxHighWatermark: 32 * 1024 * 1024,   // 32 MB
-  minLowWatermark: 2 * 1024 * 1024,     // 2 MB
-  maxLowWatermark: 16 * 1024 * 1024,    // 16 MB
-  adjustIntervalMs: 2000                 // Adjust at most every 2 seconds
+  minHighWatermark: 8 * 1024 * 1024,   // 8 MB
+  maxHighWatermark: 64 * 1024 * 1024,  // 64 MB
+  minLowWatermark: 4 * 1024 * 1024,    // 4 MB
+  maxLowWatermark: 32 * 1024 * 1024,   // 32 MB
+  adjustIntervalMs: 1000                // Adjust every 1 second
 };
 
 export class WebRtcManager {
   public static readonly CHUNK_SIZE = 60 * 1024; // 60 KB to fit within standard SCTP max message bounds (64 KB)
 
-  // Legacy static constants preserved for backward compatibility
+  // Static default watermark constants
   public static readonly HIGH_WATERMARK = 8 * 1024 * 1024; // 8 MB
   public static readonly LOW_WATERMARK = 4 * 1024 * 1024; // 4 MB
 
@@ -97,8 +97,8 @@ export class WebRtcManager {
   constructor(options: WebRtcManagerOptions, watermarkConfig?: Partial<WatermarkConfig>) {
     this.options = options;
     this.watermarkConfig = { ...DEFAULT_WATERMARK_CONFIG, ...watermarkConfig };
-    this.currentHighWatermark = WebRtcManager.HIGH_WATERMARK; // Start at legacy default
-    this.currentLowWatermark = WebRtcManager.LOW_WATERMARK;
+    this.currentHighWatermark = 16 * 1024 * 1024; // Start at 16 MB for high throughput
+    this.currentLowWatermark = 8 * 1024 * 1024;   // Start at 8 MB
   }
 
   createPeerConnection(): RTCPeerConnection {
@@ -403,8 +403,8 @@ export class WebRtcManager {
     this.sendSamples = [];
     this.estimatedDrainRateBps = 0;
     this.estimatedSendRateBps = 0;
-    this.currentHighWatermark = WebRtcManager.HIGH_WATERMARK;
-    this.currentLowWatermark = WebRtcManager.LOW_WATERMARK;
+    this.currentHighWatermark = 16 * 1024 * 1024;
+    this.currentLowWatermark = 8 * 1024 * 1024;
     // Sync the actual data channel threshold
     if (this.fileChannel) {
       this.fileChannel.bufferedAmountLowThreshold = this.currentLowWatermark;
