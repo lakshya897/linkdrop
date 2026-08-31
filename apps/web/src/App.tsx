@@ -57,7 +57,6 @@ function MainApp() {
   const boundedWriteQueueRef = useRef<BoundedWriteQueue | null>(null);
   const receivedChunksRef = useRef<Set<number>>(new Set());
   const saveHandleRef = useRef<FileSystemFileHandle | null>(null);
-  const lastProgressTimeRef = useRef<number>(0);
   const stallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const roleRef = useRef<'sender' | 'receiver' | null>(null);
@@ -68,6 +67,7 @@ function MainApp() {
   const sessionIdRef = useRef<string | null>(null);
   const transferStateRef = useRef<string>('IDLE');
   const transferIdRef = useRef<string | null>(null);
+  const bytesTransferredRef = useRef<number>(0);
 
   useEffect(() => {
     roleRef.current = role;
@@ -91,6 +91,49 @@ function MainApp() {
 
   useEffect(() => {
     transferStateRef.current = transferState;
+  }, [transferState]);
+
+  useEffect(() => {
+    bytesTransferredRef.current = bytesTransferred;
+  }, [bytesTransferred]);
+
+  // Unified real-time telemetry calculation for both sender and receiver
+  useEffect(() => {
+    if (transferState !== 'TRANSFERRING') {
+      return;
+    }
+
+    const startTime = Date.now();
+    let lastTime = Date.now();
+    let lastBytes = 0;
+
+    const telemetryInterval = setInterval(() => {
+      const now = Date.now();
+      const elapsed = (now - startTime) / 1000;
+      const currentBytes = bytesTransferredRef.current;
+
+      // Current Speed
+      const bytesDiff = currentBytes - lastBytes;
+      const timeDiff = (now - lastTime) / 1000;
+      if (timeDiff > 0) {
+        const speed = bytesDiff / timeDiff;
+        setTransferSpeed(speed);
+        setPeakSpeed(prev => Math.max(prev, speed));
+      }
+      lastBytes = currentBytes;
+      lastTime = now;
+
+      // Average Speed & ETA
+      const totalSize = incomingMetadataRef.current?.fileSize || selectedFileRef.current?.size || 0;
+      if (elapsed > 0) {
+        const avg = currentBytes / elapsed;
+        setAvgSpeed(avg);
+        const remaining = totalSize - currentBytes;
+        setEta(avg > 0 && remaining > 0 ? Math.ceil(remaining / avg) : null);
+      }
+    }, 500);
+
+    return () => clearInterval(telemetryInterval);
   }, [transferState]);
 
   useEffect(() => {
@@ -234,8 +277,11 @@ function MainApp() {
 
         const meta = incomingMetadataRef.current;
         if (meta) {
-          const currentBytes = receivedChunksRef.current.size * meta.chunkSize;
-          setBytesTransferred(Math.min(currentBytes, meta.fileSize));
+          const currentBytes = Math.min(receivedChunksRef.current.size * meta.chunkSize, meta.fileSize);
+          bytesTransferredRef.current = currentBytes;
+          if (receivedChunksRef.current.size % 32 === 0 || currentBytes >= meta.fileSize) {
+            setBytesTransferred(currentBytes);
+          }
         }
 
         if (boundedWriteQueueRef.current) {
@@ -598,37 +644,6 @@ function MainApp() {
     const chunkSize = WebRtcManager.CHUNK_SIZE;
     const fileSize = fileObj.size;
 
-    let chunkIndex = 0;
-    const startTime = Date.now();
-    lastProgressTimeRef.current = Date.now();
-    let lastBytes = 0;
-
-    const statsInterval = setInterval(() => {
-      const now = Date.now();
-      const elapsed = (now - startTime) / 1000;
-      const totalSent = chunkIndex * chunkSize;
-      setBytesTransferred(Math.min(totalSent, fileSize));
-
-      // Current Speed
-      const chunkBytes = totalSent - lastBytes;
-      const timeDiff = (now - lastProgressTimeRef.current) / 1000;
-      if (timeDiff > 0) {
-        const speed = chunkBytes / timeDiff;
-        setTransferSpeed(speed);
-        setPeakSpeed(prev => Math.max(prev, speed));
-      }
-      lastBytes = totalSent;
-      lastProgressTimeRef.current = now;
-
-      // Average Speed & ETA
-      if (elapsed > 0) {
-        const avg = totalSent / elapsed;
-        setAvgSpeed(avg);
-        const remaining = fileSize - totalSent;
-        setEta(avg > 0 ? Math.ceil(remaining / avg) : null);
-      }
-    }, 1000);
-
     // Reset adaptive watermark state for this transfer
     rtcManagerRef.current?.resetAdaptiveState();
 
@@ -637,6 +652,7 @@ function MainApp() {
       rtcManagerRef.current?.sampleAndAdapt();
     }, 250);
 
+    let chunkIndex = 0;
     const fileReader = new BoundedFileReader(fileObj, chunkSize, 128);
 
     try {
@@ -663,11 +679,16 @@ function MainApp() {
 
         rtcManagerRef.current?.sendFileChunk(chunkIndex, payload);
         chunkIndex++;
+        const sentBytes = Math.min(chunkIndex * chunkSize, fileSize);
+        bytesTransferredRef.current = sentBytes;
+        if (chunkIndex % 32 === 0 || sentBytes === fileSize) {
+          setBytesTransferred(sentBytes);
+        }
 
-        // Yield to macrotask queue every 1024 chunks so WebSocket
+        // Yield to macrotask queue every 512 chunks so WebSocket
         // PING/PONG and UI events can process cleanly without stalling
         // network throughput.
-        if (chunkIndex % 1024 === 0) {
+        if (chunkIndex % 512 === 0) {
           await new Promise(r => setTimeout(r, 0));
         }
       }
@@ -692,7 +713,6 @@ function MainApp() {
       setTransferState('FAILED');
       setErrorMsg('Transmission failure');
     } finally {
-      clearInterval(statsInterval);
       clearInterval(adaptiveInterval);
       isSendingRef.current = false;
     }
@@ -922,39 +942,33 @@ function MainApp() {
 
               <div className="w-full max-w-md flex flex-col gap-4 mt-2">
                 <div className="glass-panel p-6 rounded-2xl flex flex-col gap-4 border border-white/10 shadow-2xl">
-                  {/* Mode Tab Switches */}
-                  <div className="flex bg-[#09090B] p-1 rounded-xl border border-white/10">
-                    <button
-                      onClick={() => setLandingMode('send')}
-                      className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${landingMode === 'send' ? 'bg-primary text-white shadow-lg' : 'text-on-surface-variant hover:text-white'}`}
-                    >
-                      <span className="material-symbols-outlined text-base">send</span>
-                      Send Files
-                    </button>
-                    <button
-                      onClick={() => setLandingMode('receive')}
-                      className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${landingMode === 'receive' ? 'bg-primary text-white shadow-lg' : 'text-on-surface-variant hover:text-white'}`}
-                    >
-                      <span className="material-symbols-outlined text-base">download</span>
-                      Receive Files
-                    </button>
-                  </div>
-
-                  {landingMode === 'send' ? (
-                    <div className="flex flex-col gap-3">
-                      <p className="text-xs text-on-surface-variant m-0">Host a secure peer-to-peer session to send files directly to any recipient.</p>
+                  {/* Transfer Action Controls */}
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-semibold text-on-surface flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-base text-primary">send</span>
+                        Host a Transfer Session
+                      </label>
                       <button
                         onClick={handleCreateSession}
-                        className="primary-btn w-full py-3.5 px-6 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 mt-1"
+                        className="primary-btn w-full py-3.5 px-6 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
                         id="btn-create-session"
                       >
                         <span className="material-symbols-outlined text-base">send</span>
                         SEND FILES (START SESSION)
                       </button>
                     </div>
-                  ) : (
-                    <div className="flex flex-col gap-3">
-                      <p className="text-xs text-on-surface-variant m-0">Enter the 6-digit pairing PIN shown on the sender's device to connect & receive payload.</p>
+
+                    <div className="relative flex items-center justify-center my-1">
+                      <div className="border-t border-white/10 w-full"></div>
+                      <span className="bg-[#09090B] px-3 text-[10px] uppercase font-mono tracking-widest text-on-surface-variant absolute">OR RECEIVE FILES</span>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-semibold text-on-surface flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-base text-secondary">download</span>
+                        Enter Receiver Pairing PIN
+                      </label>
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
@@ -967,15 +981,15 @@ function MainApp() {
                         />
                         <button
                           onClick={handleJoinSession}
-                          className="primary-btn py-3 px-6 rounded-xl text-sm font-semibold whitespace-nowrap flex items-center justify-center gap-1"
+                          className="secondary-btn py-3 px-6 rounded-xl text-sm font-semibold whitespace-nowrap flex items-center justify-center gap-1"
                           id="btn-join-session"
                         >
                           <span className="material-symbols-outlined text-base">download</span>
-                          Join & Receive
+                          Join
                         </button>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1129,7 +1143,7 @@ function MainApp() {
                         <div className="bg-surface p-3 rounded-lg border border-white/5">
                           <span className="text-gray-500 block text-[10px]">Buffered Amount</span>
                           <span id="buffered-amount-display" className="font-mono text-amber-400 font-semibold">
-                            {formatSize(stats?.bytesSent ? rtcManagerRef.current?.getFileBufferedAmount() || 0 : 0)}
+                            {formatSize(rtcManagerRef.current?.getFileBufferedAmount() || 0)}
                           </span>
                         </div>
                       </div>
