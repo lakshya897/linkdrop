@@ -1,6 +1,9 @@
 {
   "outputDirectory": "apps/web/dist",
   "rewrites": [
+    { "source": "/api/sessions/join", "destination": "/api/join" },
+    { "source": "/api/sessions", "destination": "/api/sessions" },
+    { "source": "/api/messages", "destination": "/api/messages" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

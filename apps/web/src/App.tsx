@@ -9,7 +9,7 @@ import { BenchmarkPage } from './BenchmarkPage';
 import { CrystalBackground } from './components/CrystalBackground';
 
 const isLocalEnv = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-const SIGNALING_API_URL = import.meta.env.VITE_SIGNALING_API_URL || (isLocalEnv ? 'http://localhost:3000' : '');
+const SIGNALING_API_URL = import.meta.env.VITE_SIGNALING_API_URL || (isLocalEnv ? 'http://localhost:3000' : (typeof window !== 'undefined' ? window.location.origin : ''));
 const SIGNALING_WS_URL = import.meta.env.VITE_SIGNALING_WS_URL || (isLocalEnv ? 'ws://localhost:3000' : '');
 
 function MainApp() {
@@ -305,28 +305,15 @@ function MainApp() {
   const connectWebSocket = (sessId: string, currentPeerId: string) => {
     if (wsRef.current) {
       wsRef.current.close();
+      wsRef.current = null;
     }
 
-    const wsUrl = `${SIGNALING_WS_URL}/ws/signaling/${sessId}/${currentPeerId}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log('WebSocket signaling connection opened');
-      ws.send(JSON.stringify({
-        type: 'CLIENT_HELLO',
-        sessionId: sessId,
-        peerId: currentPeerId
-      }));
-    };
-
-    ws.onmessage = async (event) => {
+    const processMessage = async (msg: any, sendChannel: { send: (data: string) => void }) => {
       try {
-        const msg = JSON.parse(event.data);
-        console.log('Received message:', JSON.stringify(msg));
+        console.log('Received signaling message:', JSON.stringify(msg));
 
         if (msg.type === 'PING') {
-          ws.send(JSON.stringify({
+          sendChannel.send(JSON.stringify({
             type: 'PONG',
             sessionId: sessId,
             peerId: currentPeerId
@@ -345,12 +332,12 @@ function MainApp() {
           setConnectedPeers(otherPeers);
 
           if (roleRef.current === 'sender') {
-            const manager = initWebRtcManager(sessId, currentPeerId, ws);
+            const manager = initWebRtcManager(sessId, currentPeerId, sendChannel as WebSocket);
             manager.createPeerConnection();
             manager.createControlChannel();
             manager.createFileChannel();
             manager.createOffer().then(offer => {
-              ws.send(JSON.stringify({
+              sendChannel.send(JSON.stringify({
                 type: 'WEBRTC_OFFER',
                 sessionId: sessId,
                 peerId: currentPeerId,
@@ -381,13 +368,12 @@ function MainApp() {
         if (msg.type === 'SESSION_ERROR') {
           setSessionStatus('ERROR');
           setErrorMsg(msg.payload?.message || 'A session error occurred');
-          ws.close();
         }
 
         if (msg.type === 'WEBRTC_OFFER') {
-          const manager = initWebRtcManager(sessId, currentPeerId, ws);
+          const manager = initWebRtcManager(sessId, currentPeerId, sendChannel as WebSocket);
           manager.handleOffer(msg.payload).then(answer => {
-            ws.send(JSON.stringify({
+            sendChannel.send(JSON.stringify({
               type: 'WEBRTC_ANSWER',
               sessionId: sessId,
               peerId: currentPeerId,
@@ -435,22 +421,90 @@ function MainApp() {
           }
         }
       } catch (err) {
-        console.error('Error parsing signaling message:', err);
+        console.error('Error processing signaling message:', err);
       }
     };
 
-    ws.onclose = (event) => {
-      console.log('WebSocket signaling connection closed', event);
-      if (sessionStatusRef.current !== 'ERROR' && sessionStatusRef.current !== 'IDLE') {
-        setSessionStatus('ERROR');
-        setErrorMsg('Signaling channel disconnected');
+    if (SIGNALING_WS_URL) {
+      try {
+        const wsUrl = `${SIGNALING_WS_URL}/ws/signaling/${sessId}/${currentPeerId}`;
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          console.log('WebSocket signaling connection opened');
+          ws.send(JSON.stringify({
+            type: 'CLIENT_HELLO',
+            sessionId: sessId,
+            peerId: currentPeerId
+          }));
+        };
+
+        ws.onmessage = async (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            await processMessage(msg, ws);
+          } catch (err) {
+            console.error('Error parsing WebSocket message:', err);
+          }
+        };
+
+        ws.onclose = (event) => {
+          console.log('WebSocket signaling connection closed', event);
+          if (sessionStatusRef.current !== 'ERROR' && sessionStatusRef.current !== 'IDLE') {
+            setSessionStatus('ERROR');
+            setErrorMsg('Signaling channel disconnected');
+          }
+        };
+
+        ws.onerror = (err) => {
+          console.error('WebSocket error:', err);
+          ws.close();
+        };
+
+        return;
+      } catch (err) {
+        console.warn('WebSocket connection failed, falling back to Serverless HTTP signaling:', err);
+      }
+    }
+
+    // HTTP Signaling Polling Fallback (Vercel Serverless Functions)
+    const httpChannel = {
+      send: (dataStr: string) => {
+        try {
+          const message = JSON.parse(dataStr);
+          fetch(`${SIGNALING_API_URL}/api/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: sessId, senderPeerId: currentPeerId, message })
+          }).catch((err) => console.error('HTTP signaling send error:', err));
+        } catch (err) {
+          console.error('Malformed HTTP signaling message:', err);
+        }
       }
     };
 
-    ws.onerror = (err) => {
-      console.error('WebSocket error:', err);
-      ws.close();
-    };
+    // Poll HTTP messages every 500ms
+    const pollInterval = setInterval(async () => {
+      if (sessionStatusRef.current === 'ERROR' || sessionStatusRef.current === 'IDLE') {
+        clearInterval(pollInterval);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${SIGNALING_API_URL}/api/messages?sessionId=${sessId}&peerId=${currentPeerId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.messages && Array.isArray(data.messages)) {
+            for (const msg of data.messages) {
+              await processMessage(msg, httpChannel);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('HTTP signaling polling error:', err);
+      }
+    }, 500);
   };
 
   const handleCreateSession = async () => {
