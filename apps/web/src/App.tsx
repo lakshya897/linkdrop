@@ -9,7 +9,7 @@ import { BenchmarkPage } from './BenchmarkPage';
 import { CrystalBackground } from './components/CrystalBackground';
 
 const isLocalEnv = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-const SIGNALING_API_URL = import.meta.env.VITE_SIGNALING_API_URL || (isLocalEnv ? 'http://localhost:3000' : (typeof window !== 'undefined' ? window.location.origin : ''));
+const SIGNALING_API_URL = import.meta.env.VITE_SIGNALING_API_URL || (isLocalEnv ? 'http://localhost:3000' : '');
 const SIGNALING_WS_URL = import.meta.env.VITE_SIGNALING_WS_URL || (isLocalEnv ? 'ws://localhost:3000' : '');
 
 function MainApp() {
@@ -510,7 +510,7 @@ function MainApp() {
   const handleCreateSession = async () => {
     if (!SIGNALING_API_URL) {
       setSessionStatus('ERROR');
-      setErrorMsg('Signaling server is not configured for remote production deployment. To use LinkDrop on Vercel, please set VITE_SIGNALING_API_URL or run locally via "pnpm dev:signaling" and "pnpm dev:web".');
+      setErrorMsg('Signaling server is not configured for cloud deployment. For local P2P testing, run "pnpm dev:signaling" and "pnpm dev:web" in your terminal.');
       return;
     }
 
@@ -551,7 +551,7 @@ function MainApp() {
 
     if (!SIGNALING_API_URL) {
       setSessionStatus('ERROR');
-      setErrorMsg('Signaling server is not configured for remote production deployment. To use LinkDrop on Vercel, please set VITE_SIGNALING_API_URL or run locally via "pnpm dev:signaling" and "pnpm dev:web".');
+      setErrorMsg('Signaling server is not configured for cloud deployment. For local P2P testing, run "pnpm dev:signaling" and "pnpm dev:web" in your terminal.');
       return;
     }
 
