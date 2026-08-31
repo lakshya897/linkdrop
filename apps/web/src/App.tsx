@@ -508,15 +508,10 @@ function MainApp() {
   };
 
   const handleCreateSession = async () => {
-    if (!SIGNALING_API_URL) {
-      setSessionStatus('ERROR');
-      setErrorMsg('Signaling server is not configured for cloud deployment. For local P2P testing, run "pnpm dev:signaling" and "pnpm dev:web" in your terminal.');
-      return;
-    }
-
+    const apiUrl = SIGNALING_API_URL || (typeof window !== 'undefined' ? window.location.origin : '');
     try {
       setErrorMsg(null);
-      const res = await fetch(`${SIGNALING_API_URL}/api/sessions`, {
+      const res = await fetch(`${apiUrl}/api/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ creatorPeerId: peerId })
@@ -536,7 +531,7 @@ function MainApp() {
     } catch (err) {
       setSessionStatus('ERROR');
       if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
-        setErrorMsg(`Failed to connect to signaling server at ${SIGNALING_API_URL}. Please ensure the signaling server is running.`);
+        setErrorMsg(`Failed to connect to signaling server at ${apiUrl}. Please ensure the server is running.`);
       } else {
         setErrorMsg(err instanceof Error ? err.message : 'Failed to create session');
       }
@@ -549,15 +544,10 @@ function MainApp() {
       return;
     }
 
-    if (!SIGNALING_API_URL) {
-      setSessionStatus('ERROR');
-      setErrorMsg('Signaling server is not configured for cloud deployment. For local P2P testing, run "pnpm dev:signaling" and "pnpm dev:web" in your terminal.');
-      return;
-    }
-
+    const apiUrl = SIGNALING_API_URL || (typeof window !== 'undefined' ? window.location.origin : '');
     try {
       setErrorMsg(null);
-      const res = await fetch(`${SIGNALING_API_URL}/api/sessions/join`, {
+      const res = await fetch(`${apiUrl}/api/sessions/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pairingPin: inputPin, peerId })
@@ -576,7 +566,7 @@ function MainApp() {
     } catch (err) {
       setSessionStatus('ERROR');
       if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
-        setErrorMsg(`Failed to connect to signaling server at ${SIGNALING_API_URL}. Please ensure the signaling server is running.`);
+        setErrorMsg(`Failed to connect to signaling server at ${apiUrl}. Please ensure the server is running.`);
       } else {
         setErrorMsg(err instanceof Error ? err.message : 'Failed to join session');
       }
