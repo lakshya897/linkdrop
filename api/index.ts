@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 
 interface Peer {
   peerId: string;
